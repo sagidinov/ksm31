@@ -41,26 +41,26 @@ def round_rect(draw, xy, r, fill=None, outline=None, width=1):
     draw.rounded_rectangle(xy, radius=r, fill=fill, outline=outline, width=width)
 
 
-# Relative subject centers in source photos (dog head), after letterbox trim
+# Relative subject centers in source photos (dog body), after letterbox trim
 FOCUS = {
-    "01-outdoor-portrait.jpg": (0.55, 0.62),
-    "02-outdoor-yard.jpg": (0.30, 0.62),  # grey/tan Kubik on the left
-    "03-recovered-brace.jpg": (0.62, 0.45),
-    "04-soft-portrait.jpg": (0.36, 0.68),
-    "05-recovery-bandages.jpg": (0.52, 0.40),
-    "06-recovery-crate.jpg": (0.58, 0.50),
-    "07-emergency.jpg": (0.52, 0.50),
+    "01-outdoor-portrait.jpg": (0.45, 0.62),
+    "02-outdoor-yard.jpg": (0.45, 0.60),
+    "03-recovered-brace.jpg": (0.52, 0.50),
+    "04-soft-portrait.jpg": (0.50, 0.62),
+    "05-recovery-bandages.jpg": (0.50, 0.52),
+    "06-recovery-crate.jpg": (0.48, 0.52),
+    "07-emergency.jpg": (0.50, 0.55),
 }
 
-# Extra zoom per photo so the dog fills the frame
+# Keep zoom near 1.0 so the whole dog stays in frame
 ZOOM = {
-    "01-outdoor-portrait.jpg": 1.5,
-    "02-outdoor-yard.jpg": 1.9,
-    "03-recovered-brace.jpg": 1.7,
-    "04-soft-portrait.jpg": 1.85,
-    "05-recovery-bandages.jpg": 1.45,
-    "06-recovery-crate.jpg": 1.75,
-    "07-emergency.jpg": 1.3,
+    "01-outdoor-portrait.jpg": 1.02,
+    "02-outdoor-yard.jpg": 1.02,
+    "03-recovered-brace.jpg": 1.0,
+    "04-soft-portrait.jpg": 1.02,
+    "05-recovery-bandages.jpg": 1.05,
+    "06-recovery-crate.jpg": 1.05,
+    "07-emergency.jpg": 1.0,
 }
 
 
@@ -96,10 +96,7 @@ def fit_cover(
     focus=(0.5, 0.5),
     zoom: float = 1.0,
 ) -> Image.Image:
-    """Crop/scale so `focus` (x,y in source 0..1) lands at the center of the output.
-
-    zoom > 1 tightens on the subject (useful when the dog sits low in frame).
-    """
+    """Crop/scale so `focus` (x,y in source 0..1) lands at the center of the output."""
     tw, th = size
     img = trim_letterbox(img.convert("RGB"))
     sw, sh = img.size
@@ -114,9 +111,61 @@ def fit_cover(
     return img.crop((left, top, left + tw, top + th))
 
 
-def photo(name: str, size: tuple[int, int], zoom: float | None = None) -> Image.Image:
-    z = ZOOM[name] if zoom is None else zoom
-    return fit_cover(load(name), size, focus=FOCUS[name], zoom=z)
+def fit_contain(
+    img: Image.Image,
+    size: tuple[int, int],
+    focus=(0.5, 0.5),
+    pad: float = 0.06,
+    bg_mode: str = "blur",
+    valign: str = "center",
+) -> Image.Image:
+    """Fit the whole photo inside the box (dog fully visible), fill margins with blur/solid."""
+    tw, th = size
+    img = trim_letterbox(img.convert("RGB"))
+    sw, sh = img.size
+    scale = min(tw / sw, th / sh) * (1.0 - pad)
+    nw, nh = max(1, int(sw * scale + 0.5)), max(1, int(sh * scale + 0.5))
+    subject = img.resize((nw, nh), Image.Resampling.LANCZOS)
+
+    if bg_mode == "blur":
+        bg = fit_cover(img, size, focus=focus, zoom=1.12)
+        bg = bg.filter(ImageFilter.GaussianBlur(28))
+        bg = ImageEnhance.Brightness(bg).enhance(0.72)
+        bg = ImageEnhance.Color(bg).enhance(0.85)
+    elif bg_mode == "sand":
+        bg = Image.new("RGB", size, C["sand"])
+    else:
+        bg = Image.new("RGB", size, C["deep"])
+
+    out = bg.copy()
+    ox = int((tw - nw) * focus[0])
+    if valign == "top":
+        oy = int(th * 0.04)
+    elif valign == "bottom":
+        oy = th - nh - int(th * 0.04)
+    else:
+        oy = int((th - nh) * focus[1])
+    ox = max(0, min(ox, tw - nw))
+    oy = max(0, min(oy, th - nh))
+    out.paste(subject, (ox, oy))
+    return out
+
+
+def photo(
+    name: str,
+    size: tuple[int, int],
+    zoom: float | None = None,
+    mode: str = "contain",
+    valign: str = "center",
+    bg_mode: str = "blur",
+) -> Image.Image:
+    """Default: contain — whole dog visible."""
+    if mode == "cover":
+        z = ZOOM[name] if zoom is None else zoom
+        return fit_cover(load(name), size, focus=FOCUS[name], zoom=z)
+    return fit_contain(
+        load(name), size, focus=FOCUS[name], valign=valign, bg_mode=bg_mode
+    )
 
 
 def darken(img: Image.Image, factor=0.55) -> Image.Image:
@@ -187,13 +236,22 @@ def load(name: str) -> Image.Image:
 
 
 def card_cover():
-    shot = photo("01-outdoor-portrait.jpg", (W, H))
-    base = shot.convert("RGBA")
-    base = Image.alpha_composite(base, gradient_overlay((W, H), 20, 235))
-    # top soft vignette
-    top = gradient_overlay((W, H), 120, 0, color=(15, 42, 46))
-    base = Image.alpha_composite(base, top)
-
+    # Dog fully visible in the upper zone; text lives below
+    canvas = Image.new("RGB", (W, H), C["deep"])
+    shot = photo("01-outdoor-portrait.jpg", (W, 1080), valign="center")
+    canvas.paste(shot, (0, 0))
+    base = canvas.convert("RGBA")
+    # soft bottom fade into text area
+    fade = gradient_overlay((W, H), 0, 0)
+    # manual fade only near text band
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    px = overlay.load()
+    for y in range(980, H):
+        t = (y - 980) / (H - 980)
+        a = int(230 * (t ** 0.9))
+        for x in range(W):
+            px[x, y] = (15, 42, 46, a)
+    base = Image.alpha_composite(base, overlay)
     draw = ImageDraw.Draw(base)
     badge(draw, "ПЁС-ГЕРОЙ", (48, 56), bg=C["coral"])
 
@@ -207,38 +265,32 @@ def card_cover():
     sub = font(30, 500)
     draw.text((48, 1400), "Спас человека во время обстрела.", font=sub, fill=(220, 230, 226))
     draw.text((48, 1445), "Восстановился. Ждёт свою семью.", font=sub, fill=(220, 230, 226))
-
-    # accent bar
     draw.rectangle((48, 1510, 220, 1520), fill=C["mint"])
-    out = base.convert("RGB")
-    out.save(OUT / "01-cover.jpg", quality=92, optimize=True)
+    base.convert("RGB").save(OUT / "01-cover.jpg", quality=92, optimize=True)
 
 
 def card_hero():
     canvas = Image.new("RGB", (W, H), C["deep"])
-    shot = photo("03-recovered-brace.jpg", (W, 980))
+    # Photo zone ends before text panel — dog fully visible
+    photo_h = 760
+    shot = photo("03-recovered-brace.jpg", (W, photo_h), valign="center")
     canvas.paste(shot, (0, 0))
 
-    # bottom panel
-    draw = ImageDraw.Draw(canvas, "RGBA")
-    # wave-like panel
-    draw.rounded_rectangle((0, 860, W, H), radius=0, fill=C["sand"])
-    # overlapping rounded panel
     shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     sd = ImageDraw.Draw(shadow)
-    sd.rounded_rectangle((36, 820, W - 36, H - 40), radius=36, fill=(0, 0, 0, 45))
+    sd.rounded_rectangle((36, photo_h - 20, W - 36, H - 40), radius=36, fill=(0, 0, 0, 45))
     shadow = shadow.filter(ImageFilter.GaussianBlur(18))
     canvas = Image.alpha_composite(canvas.convert("RGBA"), shadow).convert("RGB")
     draw = ImageDraw.Draw(canvas)
-    round_rect(draw, (48, 840, W - 48, H - 56), 32, fill=C["white"])
+    round_rect(draw, (48, photo_h - 8, W - 48, H - 56), 32, fill=C["white"])
 
-    badge(draw, "ИСТОРИЯ", (80, 880), bg=C["deep"], fg=C["mint"])
+    badge(draw, "ИСТОРИЯ", (80, photo_h + 28), bg=C["deep"], fg=C["mint"])
 
     title = font(52, 800)
     y = draw_multiline(
         draw,
         text_wrap(draw, "Рискуя жизнью, спас человека", title, W - 200),
-        (80, 960),
+        (80, photo_h + 100),
         title,
         C["ink"],
         line_gap=8,
@@ -250,7 +302,6 @@ def card_hero():
     )
     draw_multiline(draw, text_wrap(draw, text, body, W - 200), (80, y + 28), body, C["muted"], line_gap=10)
 
-    # bottom accent chips
     chips = [("Шебекино", C["sage"]), ("Служебный пёс", C["sage"])]
     x = 80
     for label, bg in chips:
@@ -267,9 +318,7 @@ def card_story():
     canvas = Image.new("RGB", (W, H), C["sand"])
     draw = ImageDraw.Draw(canvas)
 
-    # left accent strip
     draw.rectangle((0, 0, 18, H), fill=C["coral"])
-
     badge(draw, "КТО ТАКОЙ КУБИК", (48, 48), bg=C["coral"])
 
     title = font(58, 800)
@@ -282,11 +331,11 @@ def card_story():
         line_gap=6,
     )
 
-    # Taller centered crop so Kubik fills the middle of the frame
-    shot = photo("04-soft-portrait.jpg", (W - 96, 720))
+    # Full-body outdoor shot (soft portrait crops the body in the source)
+    shot = photo("01-outdoor-portrait.jpg", (W - 96, 780), valign="center", bg_mode="sand")
     mask = Image.new("L", shot.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, shot.size[0], shot.size[1]), 28, fill=255)
-    canvas.paste(shot, (48, 280), mask)
+    canvas.paste(shot, (48, 250), mask)
 
     draw = ImageDraw.Draw(canvas)
     body = font(28, 500)
@@ -295,7 +344,7 @@ def card_story():
         "В тот день, услышав взрывы, вместо бегства он побежал предупредить человека, которого считал другом.",
         "Снаряд разорвался рядом…",
     ]
-    y = 1030
+    y = 1060
     for p in paragraphs:
         lines = text_wrap(draw, p, body, W - 120)
         y = draw_multiline(draw, lines, (48, y), body, C["ink"], line_gap=6)
@@ -305,22 +354,21 @@ def card_story():
 
 
 def card_injury():
-    shot = photo("05-recovery-bandages.jpg", (W, H))
-    base = shot.convert("RGBA")
-    base = Image.alpha_composite(base, gradient_overlay((W, H), 40, 230))
-    draw = ImageDraw.Draw(base)
+    canvas = Image.new("RGB", (W, H), C["deep"])
+    photo_h = 900
+    shot = photo("05-recovery-bandages.jpg", (W, photo_h), valign="center")
+    canvas.paste(shot, (0, 0))
+    draw = ImageDraw.Draw(canvas)
 
     badge(draw, "СПАСЕНИЕ", (48, 48), bg=C["coral"])
 
-    # content panel
-    panel_box = (48, 980, W - 48, H - 56)
-    round_rect(draw, panel_box, 32, fill=(255, 255, 255, 235))
+    round_rect(draw, (48, photo_h - 20, W - 48, H - 56), 32, fill=C["white"])
 
     title = font(46, 800)
     y = draw_multiline(
         draw,
         text_wrap(draw, "Истекающего кровью привезли в приют", title, W - 160),
-        (80, 1020),
+        (80, photo_h + 20),
         title,
         C["ink"],
         line_gap=6,
@@ -336,25 +384,24 @@ def card_injury():
         draw.text((80, y), fact, font=body, fill=C["muted"])
         y += 48
 
-    out = base.convert("RGB")
-    out.save(OUT / "04-injury.jpg", quality=92, optimize=True)
+    canvas.save(OUT / "04-injury.jpg", quality=92, optimize=True)
 
 
 def card_rehab():
     canvas = Image.new("RGB", (W, H), C["deep"])
-    shot = photo("06-recovery-crate.jpg", (W - 96, 720))
+    shot = photo("06-recovery-crate.jpg", (W - 96, 700), valign="center")
     mask = Image.new("L", shot.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, *shot.size), 28, fill=255)
     canvas.paste(shot, (48, 48), mask)
 
     draw = ImageDraw.Draw(canvas)
-    badge(draw, "РЕАБИЛИТАЦИЯ", (48, 810), bg=C["mint"], fg=C["deep"])
+    badge(draw, "РЕАБИЛИТАЦИЯ", (48, 780), bg=C["mint"], fg=C["deep"])
 
     title = font(52, 800)
     y = draw_multiline(
         draw,
         text_wrap(draw, "2 месяца — на руках у врачей", title, W - 120),
-        (48, 890),
+        (48, 860),
         title,
         C["sand"],
         line_gap=8,
@@ -367,7 +414,6 @@ def card_rehab():
     )
     draw_multiline(draw, text_wrap(draw, text, body, W - 120), (48, y + 28), body, (200, 214, 210), line_gap=10)
 
-    # stats row
     stats = [("30 кг", "вес"), ("2 мес.", "реабилитация"), ("3 лапы", "сейчас")]
     x = 48
     for val, label in stats:
@@ -380,18 +426,18 @@ def card_rehab():
 
 
 def card_now():
-    shot = photo("01-outdoor-portrait.jpg", (W, H))
-    base = shot.convert("RGBA")
-    # side gradient for text readability
-    side = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    px = side.load()
-    for y in range(H):
+    canvas = Image.new("RGB", (W, H), C["deep"])
+    shot = photo("01-outdoor-portrait.jpg", (W, 1080), valign="center")
+    canvas.paste(shot, (0, 0))
+    base = canvas.convert("RGBA")
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    px = overlay.load()
+    for y in range(980, H):
+        t = (y - 980) / (H - 980)
+        a = int(230 * (t ** 0.9))
         for x in range(W):
-            t = max(0, (x - W * 0.35) / (W * 0.65))
-            a = int(200 * (t ** 1.1))
-            # actually darken left for text? Better bottom panel again
-            pass
-    base = Image.alpha_composite(base, gradient_overlay((W, H), 10, 220))
+            px[x, y] = (15, 42, 46, a)
+    base = Image.alpha_composite(base, overlay)
     draw = ImageDraw.Draw(base)
 
     badge(draw, "СЕЙЧАС", (48, 48), bg=C["mint"], fg=C["deep"])
@@ -406,24 +452,23 @@ def card_now():
     text = "Научился ходить на трёх лапках. Чудесный пёс: умный, добрый, хороший охранник."
     draw_multiline(draw, text_wrap(draw, text, body, W - 120), (48, y + 20), body, (220, 230, 226), line_gap=10)
 
-    out = base.convert("RGB")
-    out.save(OUT / "06-now.jpg", quality=92, optimize=True)
+    base.convert("RGB").save(OUT / "06-now.jpg", quality=92, optimize=True)
 
 
 def card_character():
     canvas = Image.new("RGB", (W, H), C["sand"])
     draw = ImageDraw.Draw(canvas)
 
-    shot = photo("03-recovered-brace.jpg", (W - 96, 560))
+    shot = photo("03-recovered-brace.jpg", (W - 96, 520), valign="center", bg_mode="sand")
     mask = Image.new("L", shot.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, *shot.size), 28, fill=255)
     canvas.paste(shot, (48, 48), mask)
 
     draw = ImageDraw.Draw(canvas)
-    badge(draw, "ХАРАКТЕР", (48, 640), bg=C["deep"], fg=C["mint"])
+    badge(draw, "ХАРАКТЕР", (48, 600), bg=C["deep"], fg=C["mint"])
 
     title = font(54, 800)
-    draw.text((48, 720), "Какой он", font=title, fill=C["ink"])
+    draw.text((48, 680), "Какой он", font=title, fill=C["ink"])
 
     traits = [
         ("Умный", "Понимает людей и ситуацию"),
@@ -432,11 +477,10 @@ def card_character():
         ("Герой", "Рискнул жизнью ради друга"),
     ]
 
-    y = 820
+    y = 780
     for i, (name, desc) in enumerate(traits):
         bg = C["white"] if i % 2 == 0 else (236, 244, 240)
         round_rect(draw, (48, y, W - 48, y + 150), 24, fill=bg)
-        # accent circle
         cx, cy = 110, y + 75
         draw.ellipse((cx - 36, cy - 36, cx + 36, cy + 36), fill=C["mint"] if i != 3 else C["coral"])
         draw.text((cx - 10, cy - 18), str(i + 1), font=font(32, 800), fill=C["deep"])
@@ -448,15 +492,24 @@ def card_character():
 
 
 def card_home():
-    shot = photo("04-soft-portrait.jpg", (W, H))
-    base = shot.convert("RGBA")
-    base = Image.alpha_composite(base, gradient_overlay((W, H), 30, 240))
+    canvas = Image.new("RGB", (W, H), C["deep"])
+    shot = photo("03-recovered-brace.jpg", (W, 1080), valign="center")
+    canvas.paste(shot, (0, 0))
+    base = canvas.convert("RGBA")
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    px = overlay.load()
+    for y in range(980, H):
+        t = (y - 980) / (H - 980)
+        a = int(235 * (t ** 0.9))
+        for x in range(W):
+            px[x, y] = (15, 42, 46, a)
+    base = Image.alpha_composite(base, overlay)
     draw = ImageDraw.Draw(base)
 
     badge(draw, "ИЩЕТ ДОМ", (48, 56), bg=C["coral"])
 
     title = font(68, 800)
-    y = 1080
+    y = 1100
     for line in ["Не хватает", "только своего", "человека"]:
         draw.text((48, y), line, font=title, fill=C["sand"])
         y += 78
@@ -465,15 +518,13 @@ def card_home():
     text = "Мы надеемся, что Кубику повезёт. Он заслуживает любви."
     draw_multiline(draw, text_wrap(draw, text, body, W - 120), (48, y + 16), body, (220, 230, 226), line_gap=10)
 
-    # CTA pill
     f = font(28, 800)
     label = "Помочь Кубику найти дом"
     tw = draw.textlength(label, font=f)
     round_rect(draw, (48, 1480, 48 + tw + 56, 1555), 999, fill=C["mint"])
     draw.text((76, 1498), label, font=f, fill=C["deep"])
 
-    out = base.convert("RGB")
-    out.save(OUT / "08-home.jpg", quality=92, optimize=True)
+    base.convert("RGB").save(OUT / "08-home.jpg", quality=92, optimize=True)
 
 
 def card_help():
@@ -522,17 +573,25 @@ def card_help():
 
 def card_gallery_extra():
     """Extra lifestyle outdoor yard shot."""
-    shot = photo("02-outdoor-yard.jpg", (W, H))
-    base = shot.convert("RGBA")
-    base = Image.alpha_composite(base, gradient_overlay((W, H), 15, 200))
+    canvas = Image.new("RGB", (W, H), C["deep"])
+    shot = photo("02-outdoor-yard.jpg", (W, 1180), valign="center")
+    canvas.paste(shot, (0, 0))
+    base = canvas.convert("RGBA")
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    px = overlay.load()
+    for y in range(1100, H):
+        t = (y - 1100) / max(1, H - 1100)
+        a = int(220 * (t ** 0.85))
+        for x in range(W):
+            px[x, y] = (15, 42, 46, a)
+    base = Image.alpha_composite(base, overlay)
     draw = ImageDraw.Draw(base)
     badge(draw, "ЖИЗНЬ В ПРИЮТЕ", (48, 56), bg=C["white"], fg=C["deep"])
     title = font(58, 800)
     draw.text((48, 1280), "Спокойный.", font=title, fill=C["sand"])
     draw.text((48, 1355), "Добрый.", font=title, fill=C["sand"])
     draw.text((48, 1430), "Готовый к дому.", font=title, fill=C["mint"])
-    out = base.convert("RGB")
-    out.save(OUT / "10-yard.jpg", quality=92, optimize=True)
+    base.convert("RGB").save(OUT / "10-yard.jpg", quality=92, optimize=True)
 
 
 def main():
