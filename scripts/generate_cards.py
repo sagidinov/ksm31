@@ -46,7 +46,7 @@ FOCUS = {
     "01-outdoor-portrait.jpg": (0.55, 0.62),
     "02-outdoor-yard.jpg": (0.30, 0.62),  # grey/tan Kubik on the left
     "03-recovered-brace.jpg": (0.62, 0.45),
-    "04-soft-portrait.jpg": (0.42, 0.68),
+    "04-soft-portrait.jpg": (0.36, 0.68),
     "05-recovery-bandages.jpg": (0.52, 0.40),
     "06-recovery-crate.jpg": (0.58, 0.50),
     "07-emergency.jpg": (0.52, 0.50),
