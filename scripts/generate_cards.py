@@ -41,18 +41,82 @@ def round_rect(draw, xy, r, fill=None, outline=None, width=1):
     draw.rounded_rectangle(xy, radius=r, fill=fill, outline=outline, width=width)
 
 
-def fit_cover(img: Image.Image, size: tuple[int, int], focus=(0.5, 0.38)) -> Image.Image:
+# Relative subject centers in source photos (dog head), after letterbox trim
+FOCUS = {
+    "01-outdoor-portrait.jpg": (0.55, 0.62),
+    "02-outdoor-yard.jpg": (0.30, 0.62),  # grey/tan Kubik on the left
+    "03-recovered-brace.jpg": (0.62, 0.45),
+    "04-soft-portrait.jpg": (0.48, 0.66),
+    "05-recovery-bandages.jpg": (0.52, 0.40),
+    "06-recovery-crate.jpg": (0.58, 0.50),
+    "07-emergency.jpg": (0.52, 0.50),
+}
+
+# Extra zoom per photo so the dog fills the frame
+ZOOM = {
+    "01-outdoor-portrait.jpg": 1.5,
+    "02-outdoor-yard.jpg": 1.9,
+    "03-recovered-brace.jpg": 1.7,
+    "04-soft-portrait.jpg": 2.0,
+    "05-recovery-bandages.jpg": 1.45,
+    "06-recovery-crate.jpg": 1.75,
+    "07-emergency.jpg": 1.3,
+}
+
+
+def trim_letterbox(img: Image.Image, threshold: int = 14) -> Image.Image:
+    """Remove near-black letterbox bars common in phone exports."""
+    arr = img.convert("RGB")
+    px = arr.load()
+    w, h = arr.size
+    def row_bright(y):
+        return sum(sum(px[x, y]) for x in range(0, w, max(1, w // 40))) / (3 * (w // max(1, w // 40) + 1))
+    def col_bright(x):
+        return sum(sum(px[x, y]) for y in range(0, h, max(1, h // 40))) / (3 * (h // max(1, h // 40) + 1))
+    top = 0
+    while top < h - 1 and row_bright(top) < threshold:
+        top += 1
+    bottom = h - 1
+    while bottom > top and row_bright(bottom) < threshold:
+        bottom -= 1
+    left = 0
+    while left < w - 1 and col_bright(left) < threshold:
+        left += 1
+    right = w - 1
+    while right > left and col_bright(right) < threshold:
+        right -= 1
+    if bottom - top < h * 0.5 or right - left < w * 0.5:
+        return img  # safety
+    return img.crop((left, top, right + 1, bottom + 1))
+
+
+def fit_cover(
+    img: Image.Image,
+    size: tuple[int, int],
+    focus=(0.5, 0.5),
+    zoom: float = 1.0,
+) -> Image.Image:
+    """Crop/scale so `focus` (x,y in source 0..1) lands at the center of the output.
+
+    zoom > 1 tightens on the subject (useful when the dog sits low in frame).
+    """
     tw, th = size
-    img = img.convert("RGB")
+    img = trim_letterbox(img.convert("RGB"))
     sw, sh = img.size
-    scale = max(tw / sw, th / sh)
-    nw, nh = int(sw * scale), int(sh * scale)
+    scale = max(tw / sw, th / sh) * max(zoom, 1.0)
+    nw, nh = max(tw, int(sw * scale + 0.5)), max(th, int(sh * scale + 0.5))
     img = img.resize((nw, nh), Image.Resampling.LANCZOS)
-    left = int((nw - tw) * focus[0])
-    top = int((nh - th) * focus[1])
+    cx, cy = focus[0] * nw, focus[1] * nh
+    left = int(round(cx - tw / 2))
+    top = int(round(cy - th / 2))
     left = max(0, min(left, nw - tw))
     top = max(0, min(top, nh - th))
     return img.crop((left, top, left + tw, top + th))
+
+
+def photo(name: str, size: tuple[int, int], zoom: float | None = None) -> Image.Image:
+    z = ZOOM[name] if zoom is None else zoom
+    return fit_cover(load(name), size, focus=FOCUS[name], zoom=z)
 
 
 def darken(img: Image.Image, factor=0.55) -> Image.Image:
@@ -123,8 +187,8 @@ def load(name: str) -> Image.Image:
 
 
 def card_cover():
-    photo = fit_cover(load("01-outdoor-portrait.jpg"), (W, H), focus=(0.52, 0.32))
-    base = photo.convert("RGBA")
+    shot = photo("01-outdoor-portrait.jpg", (W, H))
+    base = shot.convert("RGBA")
     base = Image.alpha_composite(base, gradient_overlay((W, H), 20, 235))
     # top soft vignette
     top = gradient_overlay((W, H), 120, 0, color=(15, 42, 46))
@@ -152,8 +216,8 @@ def card_cover():
 
 def card_hero():
     canvas = Image.new("RGB", (W, H), C["deep"])
-    photo = fit_cover(load("03-recovered-brace.jpg"), (W, 980), focus=(0.45, 0.35))
-    canvas.paste(photo, (0, 0))
+    shot = photo("03-recovered-brace.jpg", (W, 980))
+    canvas.paste(shot, (0, 0))
 
     # bottom panel
     draw = ImageDraw.Draw(canvas, "RGBA")
@@ -218,33 +282,33 @@ def card_story():
         line_gap=6,
     )
 
-    photo = fit_cover(load("04-soft-portrait.jpg"), (W - 96, 620), focus=(0.5, 0.35))
-    # rounded photo via mask
-    mask = Image.new("L", photo.size, 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, photo.size[0], photo.size[1]), 28, fill=255)
+    # Taller centered crop so Kubik fills the middle of the frame
+    shot = photo("04-soft-portrait.jpg", (W - 96, 720))
+    mask = Image.new("L", shot.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, shot.size[0], shot.size[1]), 28, fill=255)
     layer = Image.new("RGB", (W, H), C["sand"])
-    layer.paste(photo, (48, 320), mask)
+    layer.paste(shot, (48, 280), mask)
     canvas.paste(layer)
 
     draw = ImageDraw.Draw(canvas)
-    body = font(30, 500)
+    body = font(28, 500)
     paragraphs = [
         "Кубик жил и нёс службу на предприятии в Шебекино.",
         "В тот день, услышав взрывы, вместо бегства он побежал предупредить человека, которого считал другом.",
         "Снаряд разорвался рядом…",
     ]
-    y = 980
+    y = 1030
     for p in paragraphs:
         lines = text_wrap(draw, p, body, W - 120)
-        y = draw_multiline(draw, lines, (48, y), body, C["ink"], line_gap=8)
-        y += 22
+        y = draw_multiline(draw, lines, (48, y), body, C["ink"], line_gap=6)
+        y += 16
 
     canvas.save(OUT / "03-story.jpg", quality=92, optimize=True)
 
 
 def card_injury():
-    photo = fit_cover(load("05-recovery-bandages.jpg"), (W, H), focus=(0.5, 0.4))
-    base = photo.convert("RGBA")
+    shot = photo("05-recovery-bandages.jpg", (W, H))
+    base = shot.convert("RGBA")
     base = Image.alpha_composite(base, gradient_overlay((W, H), 40, 230))
     draw = ImageDraw.Draw(base)
 
@@ -280,10 +344,10 @@ def card_injury():
 
 def card_rehab():
     canvas = Image.new("RGB", (W, H), C["deep"])
-    photo = fit_cover(load("06-recovery-crate.jpg"), (W - 96, 720), focus=(0.45, 0.35))
-    mask = Image.new("L", photo.size, 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, *photo.size), 28, fill=255)
-    canvas.paste(photo, (48, 48), mask)
+    shot = photo("06-recovery-crate.jpg", (W - 96, 720))
+    mask = Image.new("L", shot.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, *shot.size), 28, fill=255)
+    canvas.paste(shot, (48, 48), mask)
 
     draw = ImageDraw.Draw(canvas)
     badge(draw, "РЕАБИЛИТАЦИЯ", (48, 810), bg=C["mint"], fg=C["deep"])
@@ -318,8 +382,8 @@ def card_rehab():
 
 
 def card_now():
-    photo = fit_cover(load("01-outdoor-portrait.jpg"), (W, H), focus=(0.5, 0.34))
-    base = photo.convert("RGBA")
+    shot = photo("01-outdoor-portrait.jpg", (W, H))
+    base = shot.convert("RGBA")
     # side gradient for text readability
     side = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     px = side.load()
@@ -352,10 +416,10 @@ def card_character():
     canvas = Image.new("RGB", (W, H), C["sand"])
     draw = ImageDraw.Draw(canvas)
 
-    photo = fit_cover(load("03-recovered-brace.jpg"), (W - 96, 560), focus=(0.42, 0.4))
-    mask = Image.new("L", photo.size, 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, *photo.size), 28, fill=255)
-    canvas.paste(photo, (48, 48), mask)
+    shot = photo("03-recovered-brace.jpg", (W - 96, 560))
+    mask = Image.new("L", shot.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, *shot.size), 28, fill=255)
+    canvas.paste(shot, (48, 48), mask)
 
     draw = ImageDraw.Draw(canvas)
     badge(draw, "ХАРАКТЕР", (48, 640), bg=C["deep"], fg=C["mint"])
@@ -386,8 +450,8 @@ def card_character():
 
 
 def card_home():
-    photo = fit_cover(load("04-soft-portrait.jpg"), (W, H), focus=(0.5, 0.32))
-    base = photo.convert("RGBA")
+    shot = photo("04-soft-portrait.jpg", (W, H))
+    base = shot.convert("RGBA")
     base = Image.alpha_composite(base, gradient_overlay((W, H), 30, 240))
     draw = ImageDraw.Draw(base)
 
@@ -460,8 +524,8 @@ def card_help():
 
 def card_gallery_extra():
     """Extra lifestyle outdoor yard shot."""
-    photo = fit_cover(load("02-outdoor-yard.jpg"), (W, H), focus=(0.45, 0.45))
-    base = photo.convert("RGBA")
+    shot = photo("02-outdoor-yard.jpg", (W, H))
+    base = shot.convert("RGBA")
     base = Image.alpha_composite(base, gradient_overlay((W, H), 15, 200))
     draw = ImageDraw.Draw(base)
     badge(draw, "ЖИЗНЬ В ПРИЮТЕ", (48, 56), bg=C["white"], fg=C["deep"])
