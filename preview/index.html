@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Предпросмотр — Помочь Кубику найти дом</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #eef2f0;
+      --card: #ffffff;
+      --ink: #122024;
+      --muted: #5a6e70;
+      --ozon: #005bff;
+      --coral: #ff6b5a;
+      --mint: #5fbfb0;
+      --deep: #0f2a2e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Onest, system-ui, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #d8ebe6 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #ffe3dd 0%, transparent 50%),
+        var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+    header.top {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px 28px;
+      align-items: end;
+      justify-content: space-between;
+      margin-bottom: 28px;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--deep);
+      background: #dff3ee;
+      border-radius: 999px;
+      padding: 8px 14px;
+    }
+    h1 {
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 800;
+      line-height: 1.15;
+      margin-top: 12px;
+    }
+    .sub {
+      color: var(--muted);
+      margin-top: 8px;
+      font-size: 16px;
+      max-width: 42ch;
+    }
+    .meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .pill {
+      background: var(--card);
+      border: 1px solid #d7e0dc;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 28px;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    .gallery-card {
+      background: var(--card);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 18px 50px rgba(15, 42, 46, 0.08);
+    }
+    .main-shot {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      object-fit: cover;
+      border-radius: 18px;
+      background: #ddd;
+      display: block;
+    }
+    .thumbs {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .thumbs button {
+      border: 2px solid transparent;
+      padding: 0;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      background: none;
+      aspect-ratio: 3 / 4;
+    }
+    .thumbs button.active { border-color: var(--ozon); }
+    .thumbs img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .buy-panel {
+      background: var(--card);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 18px 50px rgba(15, 42, 46, 0.08);
+      position: sticky;
+      top: 20px;
+    }
+    .price-row {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin: 18px 0 8px;
+    }
+    .price {
+      font-size: 40px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+    .old {
+      color: #98a5a6;
+      text-decoration: line-through;
+      font-size: 18px;
+    }
+    .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 22px; }
+    .tag {
+      font-size: 13px;
+      font-weight: 700;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #fff1ee;
+      color: var(--coral);
+    }
+    .tag.mint { background: #dff3ee; color: var(--deep); }
+    .cta {
+      width: 100%;
+      border: 0;
+      border-radius: 14px;
+      background: var(--ozon);
+      color: white;
+      font: inherit;
+      font-weight: 700;
+      font-size: 17px;
+      padding: 16px 18px;
+      cursor: pointer;
+    }
+    .cta.secondary {
+      background: #ebf1ff;
+      color: var(--ozon);
+      margin-top: 10px;
+    }
+    .desc {
+      margin-top: 22px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+    .desc strong { color: var(--ink); font-weight: 700; }
+    .all-cards {
+      margin-top: 48px;
+    }
+    .all-cards h2 {
+      font-size: 28px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    .all-cards p {
+      color: var(--muted);
+      margin-bottom: 22px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .grid figure {
+      background: var(--card);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(15, 42, 46, 0.07);
+    }
+    .grid img {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      object-fit: cover;
+      display: block;
+    }
+    .grid figcaption {
+      padding: 12px 14px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .copy-block {
+      margin-top: 48px;
+      background: var(--card);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 18px 50px rgba(15, 42, 46, 0.08);
+    }
+    .copy-block h2 {
+      font-size: 24px;
+      margin-bottom: 14px;
+    }
+    .copy-block pre {
+      white-space: pre-wrap;
+      font-family: Onest, system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--muted);
+      background: #f5f8f7;
+      border-radius: 16px;
+      padding: 18px;
+    }
+    .video-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .video-links a {
+      color: var(--ozon);
+      font-weight: 700;
+      text-decoration: none;
+      background: #ebf1ff;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <div class="eyebrow">Предпросмотр карточки Ozon</div>
+        <h1>Помочь Кубику найти дом</h1>
+        <p class="sub">Пёс-герой из Шебекино. 10 слайдов 1200×1600 (3:4) готовы к загрузке в Seller.</p>
+      </div>
+      <div class="meta">
+        <span class="pill">Формат 3:4</span>
+        <span class="pill">10 изображений</span>
+        <span class="pill">JPEG</span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <section class="gallery-card">
+        <img id="mainShot" class="main-shot" src="../cards/01-cover.jpg" alt="Кубик — обложка" />
+        <div class="thumbs" id="thumbs"></div>
+      </section>
+
+      <aside class="buy-panel">
+        <div class="eyebrow" style="background:#ebf1ff;color:var(--ozon)">Благотворительность</div>
+        <h2 style="font-size:28px;margin-top:14px;line-height:1.2">Помочь Кубику найти дом</h2>
+        <div class="price-row">
+          <div class="price">100 ₽</div>
+          <div class="old">500 ₽</div>
+        </div>
+        <div class="badge-row">
+          <span class="tag">Пёс-герой</span>
+          <span class="tag mint">Ищет семью</span>
+        </div>
+        <button class="cta" type="button">Добавить в корзину</button>
+        <button class="cta secondary" type="button">В избранное</button>
+        <p class="desc">
+          <strong>Кубик</strong> — служебный пёс из Шебекино. Во время обстрела он побежал предупредить человека и получил тяжёлые ранения. Сейчас восстановился и ищет дом.
+        </p>
+        <div class="video-links">
+          <a href="https://vk.ru/wall-192255532_13302" target="_blank" rel="noopener">Видео VK #1</a>
+          <a href="https://vk.ru/wall-192255532_12341" target="_blank" rel="noopener">Видео VK #2</a>
+        </div>
+      </aside>
+    </div>
+
+    <section class="all-cards">
+      <h2>Все слайды галереи</h2>
+      <p>Порядок загрузки на Ozon: сначала обложка, затем история и инфографика.</p>
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <section class="copy-block">
+      <h2>Текст для карточки (название + описание)</h2>
+      <pre id="copy"></pre>
+    </section>
+  </div>
+
+  <script>
+    const slides = [
+      { src: "../cards/01-cover.jpg", title: "01 · Обложка" },
+      { src: "../cards/02-hero.jpg", title: "02 · История героя" },
+      { src: "../cards/03-story.jpg", title: "03 · Кто такой Кубик" },
+      { src: "../cards/04-injury.jpg", title: "04 · Спасение" },
+      { src: "../cards/05-rehab.jpg", title: "05 · Реабилитация" },
+      { src: "../cards/06-now.jpg", title: "06 · Сейчас" },
+      { src: "../cards/07-character.jpg", title: "07 · Характер" },
+      { src: "../cards/08-home.jpg", title: "08 · Ищет дом" },
+      { src: "../cards/09-help.jpg", title: "09 · Как это работает" },
+      { src: "../cards/10-yard.jpg", title: "10 · Жизнь в приюте" },
+    ];
+
+    const main = document.getElementById("mainShot");
+    const thumbs = document.getElementById("thumbs");
+    const grid = document.getElementById("grid");
+
+    slides.forEach((s, i) => {
+      const btn = document.createElement("button");
+      if (i === 0) btn.classList.add("active");
+      btn.innerHTML = `<img src="${s.src}" alt="${s.title}" />`;
+      btn.addEventListener("click", () => {
+        main.src = s.src;
+        main.alt = s.title;
+        [...thumbs.children].forEach(el => el.classList.remove("active"));
+        btn.classList.add("active");
+      });
+      thumbs.appendChild(btn);
+
+      const fig = document.createElement("figure");
+      fig.innerHTML = `<img src="${s.src}" alt="${s.title}" /><figcaption>${s.title}</figcaption>`;
+      grid.appendChild(fig);
+    });
+
+    document.getElementById("copy").textContent = `НАЗВАНИЕ
+Помочь Кубику найти дом
+
+ОПИСАНИЕ
+Кубик — пёс-герой. Он рисковал своей жизнью и спас человека!
+
+Кубик жил и нёс службу на предприятии в Шебекино. В тот трагичный день, когда начался обстрел, Кубик, услышав взрывы, вместо того чтобы бежать и спасать свою жизнь, побежал к домику охраны — предупредить человека, которого считал своим другом.
+
+Снаряд разорвался рядом. Истекающего кровью Кубика привезли в приют. Часть одной передней лапы оторвало, вторая была иссечена осколками и переломана в нескольких местах. Лишь благодаря огромному усилию врачей удалось сохранить вторую переднюю лапку.
+
+Потом был долгий период реабилитации: даже сходить в туалет Кубик не мог сам. Одной передней лапы нет, вторая со штифтами — на неё нельзя было опираться. 2 месяца наши девочки-врачи таскали Кубика на руках, а он парень упитанный — 30 кг.
+
+Сейчас Кубик полностью восстановился и научился передвигаться на трёх лапках. Он чудесный пёс: умный, добрый, хороший охранник. Но ему не хватает одного — своего человека рядом.
+
+Мы надеемся, что Кубику повезёт и он станет домашним. Он заслуживает любви!
+
+Видео:
+https://vk.ru/wall-192255532_13302
+https://vk.ru/wall-192255532_12341
+
+Покупка этой позиции — ваша поддержка приюта и помощь подопечным.`;
+  </script>
+</body>
+</html>
