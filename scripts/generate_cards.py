@@ -46,7 +46,7 @@ FOCUS = {
     "01-outdoor-portrait.jpg": (0.55, 0.62),
     "02-outdoor-yard.jpg": (0.30, 0.62),  # grey/tan Kubik on the left
     "03-recovered-brace.jpg": (0.62, 0.45),
-    "04-soft-portrait.jpg": (0.52, 0.70),
+    "04-soft-portrait.jpg": (0.50, 0.72),
     "05-recovery-bandages.jpg": (0.52, 0.40),
     "06-recovery-crate.jpg": (0.58, 0.50),
     "07-emergency.jpg": (0.52, 0.50),
@@ -57,7 +57,7 @@ ZOOM = {
     "01-outdoor-portrait.jpg": 1.5,
     "02-outdoor-yard.jpg": 1.9,
     "03-recovered-brace.jpg": 1.7,
-    "04-soft-portrait.jpg": 2.0,
+    "04-soft-portrait.jpg": 1.85,
     "05-recovery-bandages.jpg": 1.45,
     "06-recovery-crate.jpg": 1.75,
     "07-emergency.jpg": 1.3,
@@ -286,9 +286,7 @@ def card_story():
     shot = photo("04-soft-portrait.jpg", (W - 96, 720))
     mask = Image.new("L", shot.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, shot.size[0], shot.size[1]), 28, fill=255)
-    layer = Image.new("RGB", (W, H), C["sand"])
-    layer.paste(shot, (48, 280), mask)
-    canvas.paste(layer)
+    canvas.paste(shot, (48, 280), mask)
 
     draw = ImageDraw.Draw(canvas)
     body = font(28, 500)
